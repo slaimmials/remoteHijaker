@@ -1,4 +1,5 @@
-assert(setreadonly,"executor not supported :(")
+
+if setreadonly == nil then warn("executor not supported :(") end
 function serializeTable(val, name, skipnewlines, depth)
     skipnewlines = skipnewlines or false
     depth = depth or 2
