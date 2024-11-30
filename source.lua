@@ -1,6 +1,6 @@
 if setreadonly == nil then warn("executor not supported :(") end
 function serializeTable(val, name, skipnewlines, depth)
-	skipnewlines = skipnewlines or false
+	local skipnewlines = skipnewlines
     depth = depth or 2
 
     local tmp = string.rep(" ", depth)
