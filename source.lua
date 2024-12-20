@@ -507,7 +507,7 @@ function HighlightSyntax(source)
 	end
 	return source
 end
-local function LinesSplit(str, limit)
+local function LinesSplit(str)
     lines = {}
     for s in str:gmatch("[^\r\n]+") do
         table.insert(lines, s)
@@ -544,6 +544,7 @@ end)
 gui:ChangeCode([=[]=])
 
 local gameMT = getrawmetatable(game)
+print(serializeTable(gameMT))
 local old = gameMT.__namecall
 setreadonly(gameMT, false)
 
@@ -644,10 +645,22 @@ end)
 
 gameMT.__namecall = newcclosure(function(self, ...)
 	local args = { ... }
-	local method = getnamecallmethod()
-	if method == "FireServer" or method == "InvokeServer" or method == "Fire" or method == "Invoke" then
+	local method = (getnamecallmethod ~= nil and getnamecallmethod()) or "NGNM"
+	if method == "FireServer" or method == "InvokeServer" or method == "Fire" or method == "Invoke" or method == "NGNM" then
 		local callerScript = rawget(getfenv(0), "script")
 		local remote = self
+		if method == "NGNM" then
+			if remote.ClassName == "BindableEvent" then
+				method = "Fire"
+			elseif remote.ClassName == "BindableFunction" then
+				method = "Invoke"
+			elseif remote.ClassName == "RemoteEvent" then
+				method = "FireServer"
+			elseif remote.ClassName == "RemoteFunction" then	
+				method = "InvokeServer"
+			end
+		end
+		
 		local id = #events + 1
 
 		local nEv = {}
@@ -696,7 +709,9 @@ end)
 
 gui:OnClick(gui.objs["ClearButton"], function(input)
     for index,obj in pairs(events) do
-        obj["Visual"]["Object"]:Remove()
+		print("destroyed "..obj["Visual"]["Title"]["Text"])
+        obj["Visual"]["Object"]:Destroy()
+		
         events[index] = nil
     end
 end)
