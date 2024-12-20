@@ -709,10 +709,10 @@ end)
 
 gui:OnClick(gui.objs["ClearButton"], function(input)
     for index,obj in pairs(events) do
-		print("destroyed "..obj["Visual"]["Title"]["Text"])
-        obj["Visual"]["Object"]:Destroy()
-		
-        events[index] = nil
+		spawn(function ()
+			obj["Visual"]["Object"]:Destroy()
+        	events[index] = nil
+		end)
     end
 end)
 
