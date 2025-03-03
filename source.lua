@@ -1,7 +1,7 @@
 if setreadonly == nil then warn("executor not supported :(") end
 function serializeTable(val, name, skipnewlines, depth)
 	local skipnewlines = skipnewlines
-    depth = depth or 2
+    depth = depth or 0
 
     local tmp = string.rep(" ", depth)
     if type(name) == "number" then
@@ -35,7 +35,10 @@ function serializeTable(val, name, skipnewlines, depth)
         tmp = tmp .. val:GetFullName()
     elseif typeof(val) == "Color3" then
         tmp = tmp .. "Color3.new( " .. val.R .. "," .. val.G .. "," .. val.B .. ")"
-    else
+	elseif typeof(val) == "buffer" then	
+		print("got buffer -> "..buffer.tostring(val))
+		tmp = tmp .. buffer.tostring(val) .. "--buffer deserealize in beta"
+	else
         --tmp = tmp .. tostring(val)
         tmp = tmp .. "\"[inserializeable datatype:" .. type(val) .. "]\""
     end
@@ -152,7 +155,7 @@ gui.objs["TextTitle"]["FontFace"] =
 gui.objs["TextTitle"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
 gui.objs["TextTitle"]["BackgroundTransparency"] = 1
 gui.objs["TextTitle"]["Size"] = UDim2.new(0, 570, 0, 21)
-gui.objs["TextTitle"]["Text"] = [[Remote Hijacker | v0.1]]
+gui.objs["TextTitle"]["Text"] = [[Remote Hijacker | v0.2]]
 gui.objs["TextTitle"]["Name"] = [[Title]]
 gui.objs["TextTitle"]["Position"] = UDim2.new(0, 20, 0, 4)
 
@@ -619,35 +622,42 @@ spawn(function()
 			events[lastE]["Visual"]["Object"].Position = UDim2.fromOffset(12, 10 + (25 * (lastE - 1)))
 			gui.objs["RemoteList"]["CanvasSize"] = UDim2.new(0, 0, 0, 35 + (25 * (lastE - 1)))
 
-			events[lastE]["CompiledScript"] = "local args = "..serializeTable( events[lastE]["Arguments"]  ).."\n \n"..getPath(events[lastE]["Remote"])..":"..events[lastE]["ExecuteType"] .."(unpack(args))"
+			events[lastE]["CompiledScript"] = "local args = "..serializeTable( events[lastE]["Arguments"] ).."\n \n"..getPath(events[lastE]["Remote"])..":"..events[lastE]["ExecuteType"] .."(unpack(args))"
 			local oldId = lastE
 			events[lastE]["ScriptPath"] = getPath(events[lastE]["Script"])
 			events[lastE]["RemotePath"] = getPath(events[lastE]["Remote"])
 			
-            events[lastE]["Visual"]["Object"].InputBegan:Connect(function()
-                gui:ChangeCode(events[oldId]["CompiledScript"])
-                selectedEvent = events[oldId]
-				gui.objs["ExplorerIcon1"].Visible = false
-				gui:Traceback("")
-				local timer = math.random(1,10)/10
-				game:GetService("TweenService"):Create(gui.objs["ExplorerLoad"], TweenInfo.new(timer), {Size = UDim2.new(1, 0, 0, 4)}):Play()
-				wait(timer)
-				gui:Traceback(
-[[<font color='rgb(248,109,124)'><b>Traceback</b></font>:
-    ]]..events[oldId]["ScriptPath"]..[[<font color='rgb(125, 149, 255)'><b></b></font>]])
-				gui.objs["ExplorerIcon1"].Visible = true
-				wait(0.05)
-				gui.objs["ExplorerLoad"].Size = UDim2.new(0, 0, 0, 4)
+            events[lastE]["Visual"]["Object"].InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+					gui:ChangeCode(events[oldId]["CompiledScript"])
+					selectedEvent = events[oldId]
+					gui.objs["ExplorerIcon1"].Visible = false
+					gui:Traceback("")
+					local timer = math.random(1,10)/10
+					game:GetService("TweenService"):Create(gui.objs["ExplorerLoad"], TweenInfo.new(timer), {Size = UDim2.new(1, 0, 0, 4)}):Play()
+					wait(timer)
+					gui:Traceback(
+	[[<font color='rgb(248,109,124)'><b>Traceback</b></font>:
+		]]..events[oldId]["ScriptPath"]..[[<font color='rgb(125, 149, 255)'><b></b></font>]])
+					gui.objs["ExplorerIcon1"].Visible = true
+					wait(0.05)
+					gui.objs["ExplorerLoad"].Size = UDim2.new(0, 0, 0, 4)
+				end
             end)
 		end
 	end)
 end)
+
+local eventsCN = {"RemoteEvent","RemoteFunction","BindableEvent","BindableFunction"}
 
 gameMT.__namecall = newcclosure(function(self, ...)
 	local args = { ... }
 	local method = (getnamecallmethod ~= nil and getnamecallmethod()) or "NGNM"
 	if method == "FireServer" or method == "InvokeServer" or method == "Fire" or method == "Invoke" or method == "NGNM" then
 		local callerScript = rawget(getfenv(0), "script")
+		if callerScript and callerScript.Name == "CameraInput" and self.Name == "Event" then
+			return old(self, ...)
+		end
 		local remote = self
 		if method == "NGNM" then
 			if remote.ClassName == "BindableEvent" then
@@ -660,7 +670,15 @@ gameMT.__namecall = newcclosure(function(self, ...)
 				method = "InvokeServer"
 			end
 		end
-		
+		local accessed = false
+		for _,cName in pairs(eventsCN) do
+			if remote.ClassName == cName then
+				accessed = true
+			end
+		end
+		if not accessed then
+			return old(self, ...)
+		end
 		local id = #events + 1
 
 		local nEv = {}
@@ -675,19 +693,14 @@ gameMT.__namecall = newcclosure(function(self, ...)
 		nEv["Script"] = callerScript
 		nEv["ScriptName"] = callerScript.Name
 		--nEv["ScriptPath"] = callerScript.GetFullName(callerScript)
-        
-        local block = false
 
         for _,remote in pairs(blockedEvents) do
             if nEv["Remote"] == remote then
-                block = true
-                break;
+				return old(self, ...)
             end
         end
 
-        if not block then
-            events[id] = nEv
-        end
+        events[id] = nEv
 		
 		print("Event:", nEv["RemoteName"])
 	end
@@ -708,6 +721,7 @@ gui:OnClick(gui.objs["BlockButton"], function(input)
 end)
 
 gui:OnClick(gui.objs["ClearButton"], function(input)
+	gui.objs["RemoteList"]["CanvasSize"] = UDim2.new(0, 0, 0, 0)
     for index,obj in pairs(events) do
 		spawn(function ()
 			obj["Visual"]["Object"]:Destroy()
