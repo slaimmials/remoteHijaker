@@ -1,13 +1,16 @@
-if setreadonly == nil then warn("executor not supported :(") end
-function serializeTable(val, name, skipnewlines, depth)
+if setreadonly == nil or getrawmetatable == nil then 
+	error("executor not supported :(") 
+end
+
+function serializeTable(val, name, skipnewlines, depth, indexed)
 	local skipnewlines = skipnewlines
     depth = depth or 0
 
     local tmp = string.rep(" ", depth)
-    if type(name) == "number" then
+    if (type(name) == "number" and indexed) or type(name) == "string" then
         name = "["..name.."]"
+		tmp = tmp .. name .. " = "
     end
-    if name then tmp = tmp .. name .. " = " end
 
     if type(val) == "table" then
         tmp = tmp .. "{" .. (not skipnewlines and "\n" or "")
@@ -16,7 +19,7 @@ function serializeTable(val, name, skipnewlines, depth)
             tmp =  tmp .. serializeTable(v, k, skipnewlines, depth + 1) .. "," .. (not skipnewlines and "\n" or "")
         end
 
-        tmp = tmp .. string.rep(" ", depth) .. "}"
+        tmp = tmp .. string.rep("  ", depth) .. "}"
     elseif type(val) == "number" then
         tmp = tmp .. tostring(val)
     elseif type(val) == "string" then
@@ -36,8 +39,20 @@ function serializeTable(val, name, skipnewlines, depth)
     elseif typeof(val) == "Color3" then
         tmp = tmp .. "Color3.new( " .. val.R .. "," .. val.G .. "," .. val.B .. ")"
 	elseif typeof(val) == "buffer" then	
-		print("got buffer -> "..buffer.tostring(val))
-		tmp = tmp .. buffer.tostring(val) .. "--buffer deserealize in beta"
+		tmp = tmp .. buffer.tostring(val)
+	elseif typeof(val) == "ColorSequence" then
+		local Keypoints = ""
+		for _,keypoint in pairs(val.Keypoints) do
+			Keypoints = Keypoints .. "ColorSequenceKeypoint.new(" ..
+				keypoint.Time .. ",Color3.new(" ..
+					keypoint.Value.R .. "," ..
+					keypoint.Value.G .. "," ..
+					keypoint.Value.B .. "," ..
+				")" ..
+			"),"
+		end
+		Keypoints = Keypoints:sub(1,#Keypoints-1)
+		tmp = tmp .. "ColorSequence.new{" .. Keypoints .. "}"
 	else
         --tmp = tmp .. tostring(val)
         tmp = tmp .. "\"[inserializeable datatype:" .. type(val) .. "]\""
@@ -155,7 +170,7 @@ gui.objs["TextTitle"]["FontFace"] =
 gui.objs["TextTitle"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
 gui.objs["TextTitle"]["BackgroundTransparency"] = 1
 gui.objs["TextTitle"]["Size"] = UDim2.new(0, 570, 0, 21)
-gui.objs["TextTitle"]["Text"] = [[Remote Hijacker | v0.2]]
+gui.objs["TextTitle"]["Text"] = [[Remote Hijacker | v0.21]]
 gui.objs["TextTitle"]["Name"] = [[Title]]
 gui.objs["TextTitle"]["Position"] = UDim2.new(0, 20, 0, 4)
 
@@ -649,13 +664,19 @@ spawn(function()
 end)
 
 local eventsCN = {"RemoteEvent","RemoteFunction","BindableEvent","BindableFunction"}
+local eventProcessing = false
 
 gameMT.__namecall = newcclosure(function(self, ...)
 	local args = { ... }
 	local method = (getnamecallmethod ~= nil and getnamecallmethod()) or "NGNM"
 	if method == "FireServer" or method == "InvokeServer" or method == "Fire" or method == "Invoke" or method == "NGNM" then
+		while eventProcessing do
+			task.wait()
+		end
+		eventProcessing = true
 		local callerScript = rawget(getfenv(0), "script")
 		if callerScript and callerScript.Name == "CameraInput" and self.Name == "Event" then
+			eventProcessing = false
 			return old(self, ...)
 		end
 		local remote = self
@@ -677,10 +698,11 @@ gameMT.__namecall = newcclosure(function(self, ...)
 			end
 		end
 		if not accessed then
+			eventProcessing = false
 			return old(self, ...)
 		end
 		local id = #events + 1
-
+		
 		local nEv = {}
 
 		nEv["Arguments"] = args
@@ -696,13 +718,14 @@ gameMT.__namecall = newcclosure(function(self, ...)
 
         for _,remote in pairs(blockedEvents) do
             if nEv["Remote"] == remote then
+				eventProcessing = false
 				return old(self, ...)
             end
         end
 
         events[id] = nEv
-		
-		print("Event:", nEv["RemoteName"])
+		eventProcessing = false
+		--print("Event:", nEv["RemoteName"])
 	end
 	return old(self, ...)
 end)
