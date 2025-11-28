@@ -1,3 +1,4 @@
+--nothing
 if setreadonly == nil or getrawmetatable == nil then 
 	error("executor not supported :(") 
 end
@@ -670,6 +671,7 @@ gameMT.__namecall = newcclosure(function(self, ...)
 	local args = { ... }
 	local method = (getnamecallmethod ~= nil and getnamecallmethod()) or "NGNM"
 	if method == "FireServer" or method == "InvokeServer" or method == "Fire" or method == "Invoke" or method == "NGNM" then
+		print("Intercepted:", method, self.Name)
 		while eventProcessing do
 			task.wait()
 		end
